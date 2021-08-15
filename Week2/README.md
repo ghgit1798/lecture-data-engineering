@@ -24,7 +24,7 @@
         1. Variable Cost Option의 경우 요금 폭탄
         2. 더욱 신중한 SQL 작성 요구
         3. 연간 비용 → 월간 비용
-3. Database best practice
+3. **Database best practice**
     1. 사내 데이터 공개 정책 숙지
     2. 신중한 SQL 쿼리 작성 필요
     3. 초기엔 Consistency를 유지하는 것이 중요
