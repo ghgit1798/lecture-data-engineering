@@ -37,7 +37,7 @@
 2. 자신의 강점을 찾기
 3. 일을 효율적으로 하기
 
-## ⭐ 1 Time
+## ⭐ 강의 내용
 
 중요한 점
 
@@ -81,3 +81,149 @@
 2. Join 시 고려할 점
     - ⭐ 중복 레코드가 없고, PK의 Uniqueness가 보장됨을 체크해야함
 3. 타임 스탬프 필드가 있다면 최근에도 업데이트된 레코드가 있는지 꼭 확인. 언제부터 레코드가 생성되었는지도 확인. 월별로 레코드수를 확인해보는 것도 좋은 버릇
+
+## ⭐ SQL 학습
+
+SQL을 익숙하게 사용할 수 있도록 다음 내용에 대해 학습을 진행했다.
+
+1. **DDL/DML 기본 문법**
+    1. SELECT/UPDATE/INSERT/DELETE
+    2. CREATE/DROP/RENAME
+    3. WHERE, CASE WHEN, GROUP BY, ORDER BY
+    4. ROW NUMBER() OVER(), LEFT, TO_CHAR, CTAS
+2. **중복 레코드 확인하기**
+    1. 📌 Count 함수
+        1. COUNT(1), COUNT(value), COUNT(DISTINCT value) 차이❗
+        2. COUNT(1)은 NULL이 포함된 행도 COUNT
+        3. COUNT(value)는 NULL 제외
+        4. COUNT(DISTINCT value)는 중복된 value 제외
+    2. SELECT DISTINCT
+3. **NULL 확인하기**
+    1. IS NULL/IS NOT NULL
+    2. Boolean과 NULL의 차이
+        1. IS NOT TRUE ↔ True가 아닌 것, False와 NULL 모두 해당
+        2. IS NOT FALSE ↔ False가 아닌 것, True와 NULL 모두 해당
+    3. NULL과의 사칙연산 결과는 모두 NULL
+        1. 값이 존재하지 않음을 의미하므로!
+4. ⭐ **DW에서는 Primary Key를 지정해도 Uniqueness를 보장하지 않는다.**
+5. **JOIN**
+    1. INNER/LEFT/RIGHT/SELF/FULL/CROSS JOIN
+6. **DELETE FROM과 TRUNCATE의 차이❓**
+    1. DELETE FROM
+        1. DELETE FROM은 테이블의 모든 레코드를 삭제한다.
+        2. 단, 테이블은 남아있다는 점이 DROP TABLE과 다른 점이다.
+        3. WHERE 사용해 특정 레코드만 삭제 가능하다.
+    2. TRUNCATE
+        1. DELETE FROM과 마찬가지로 테이블의 모든 레코드를 삭제한다.
+        2. DELETE FROM에 비해 삭제 속도가 빠르다.
+        3. 하지만, TRUNCATE는 WHERE를 지원하지 않으며, Transaction 또한 지원하지 않는다.
+7. **COALESCE와 NULLIF**
+    1. COALESCE(value, 1)
+        1. value가 NULL인 경우 1로 대체할 수 있다.
+    2. NULLIF(value, 0)
+        1. value가 0이면 NULL을 리턴한다.
+8. **UNION과 UNION ALL 차이점**
+    1. UNION
+        1. 합집합으로, 중복을 제거한다.
+    2. UNION ALL
+        1. 중복을 허용한 합집합이다.
+
+## ⭐ Assignment
+
+1. 유저별 가장 먼저 방문한 채널과, 나중에 방문한 채널은?
+
+```sql
+%%sql
+
+SELECT *
+FROM (
+  SELECT userid, channel, ROW_NUMBER() OVER(partition by userid order by ts) f_channel, ROW_NUMBER() OVER(partition by userid order by ts desc) l_channel
+  FROM raw_data.user_session_channel usc
+    JOIN raw_data.session_timestamp st ON usc.sessionid = st.sessionid
+)
+WHERE f_channel = 1 or l_channel = 1
+LIMIT 10;
+```
+
+- Best Practice
+
+```sql
+%%sql
+
+WITH cte AS (
+    SELECT userid, channel, (ROW_NUMBER() OVER (PARTITION BY usc.userid ORDER BY st.ts acc)) AS rn1, (ROW_NUMBER() OVER (PARTITION BY usc.userid ORDER BY st.ts desc)) AS rn2
+    FROM raw_data.user_session_channel usc
+    JOIN raw_data.session_timestamp st ON usc.sessionid = st.sessionid
+)
+
+SELECT cte1.userid, cte1.channel AS first_touch, cte2.channel AS last_touch
+FROM cte cte1
+JOIN cte cte2 ON cte1.userid = cte2.userid
+WHERE cte1.rn1 = 1 and cte2.rn2 = 1
+ORDER BY 1;
+```
+
+With AS 구문이 익숙하지 않아 사용할 생각을 미처 못했다. 미리 SELECT한 테이블을 생성하고, 그걸 다시 Self Join하면 더 간단하게 해결할 수 있는 문제였다.
+
+1. Gross Revenue 찾기
+
+```sql
+%%sql 
+-- 상위 10개 유저 탐색
+
+SELECT userid, sum(amount) total_amount
+FROM raw_data.session_transaction st LEFT JOIN raw_data.user_session_channel usc ON st.sessionid = usc.sessionid
+GROUP BY userid
+ORDER BY total_amount desc
+LIMIT 10;
+```
+
+이 문제는 의도한 대로 잘 풀어서 칭찬을 받았다. 👍
+
+1. 채널별 월 매출액 테이블 만들기
+
+```sql
+%%sql
+
+CREATE TABLE ghgoo1798.monthly_active_user_summary AS
+SELECT A.month, A.channel, A.uniqueUsers, B.paidUsers, ROUND(convert(float, B.paidUsers)/A.uniqueUsers*100, 2) AS conversionRate, grossRevenue, netRevenue
+FROM (
+  SELECT TO_CHAR(ts, 'YYYY-MM') AS month, channel, COUNT(DISTINCT userid) uniqueUsers
+  FROM raw_data.session_timestamp A LEFT JOIN raw_data.user_session_channel B ON A.sessionid=B.sessionid
+  GROUP BY month, channel
+) AS A JOIN (
+  SELECT TO_CHAR(ts, 'YYYY-MM') AS month, channel, COUNT(DISTINCT userid) paidUsers, SUM(amount) grossRevenue
+  FROM raw_data.session_transaction C JOIN raw_data.user_session_channel B ON B.sessionid=C.sessionid JOIN raw_data.session_timestamp A ON B.sessionid=A.sessionid
+  GROUP BY month, channel
+) AS B ON A.month=B.month AND A.channel=B.channel LEFT JOIN
+(
+  SELECT TO_CHAR(ts, 'YYYY-MM') AS month, channel, SUM(amount) netRevenue
+  FROM raw_data.session_transaction C JOIN raw_data.user_session_channel B ON B.sessionid=C.sessionid JOIN raw_data.session_timestamp A ON B.sessionid=A.sessionid
+  WHERE refunded is False
+  GROUP BY month, channel
+) AS C ON A.month=C.month AND A.channel=C.channel
+ORDER BY month, channel;
+```
+
+정답은 구했지만... CASE WHEN 문법을 사용하지 못했다. 따라서 서브쿼리가 중첩되고 가독성이 떨어지는 SQL문으로 제출할 수 밖에 없었다.
+
+→ CASE WHEN은 집계 함수인 COUNT, SUM 안에서도 사용할 수 있다.
+
+- Best Practice
+
+```sql
+%%sql
+
+SELECT TO_CHAR(ts, 'YYYY-MM') AS month, channel, 
+      COUNT(DISTINCT userid) uniqueUsers,
+      COUNT(DISTINCT CASE WHEN amount is not NULL THEN userid END) paidUsers,
+      paidUsers,
+      ROUND(convert(float, paidUsers)/uniqueUsers*100, 2) AS conversionRate,
+      SUM(amount) grossRevenue,
+      SUM(CASE WHEN refunded is False THEN amount END) netRevenue
+FROM raw_data.session_timestamp A 
+JOIN raw_data.user_session_channel B ON A.sessionid=B.sessionid
+LEFT JOIN raw_data.session_transaction C ON B.sessionid=C.sessionid
+GROUP BY 1, 2
+ORDER BY 1, 2;
+```
