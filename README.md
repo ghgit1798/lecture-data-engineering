@@ -98,3 +98,60 @@
 
 위 내용을 바탕으로 3가지 Assingment를 수행했고, 받은 피드백을 바탕으로 SQL을 익숙하게 사용할 수 있게 되었다.
 
+## 4️⃣ 주차 강의 내용
+
+3주차 Assignment 리뷰와 Airflow에 대한 학습을 진행했다.
+
+### ETL vs ELT
+
+데이터 엔지니어 채용 공고 시 자주 나오는 ETL과 ELT의 차이에 대해 배웠다. 
+
+- ETL : 데이터 추출 후 가공한 뒤 저장하는 것
+- ELT : 데이터 추출 후 저장을 먼저 한 뒤 가공하는 것
+
+### Data Lake
+
+따라서 함께 나오는 개념이 Data Lake였다. Dataware house보다 더 큰 개념이다. AWS의 S3도 Data Lake로 정형/비정형 데이터를 함께 적재할 수 있고, 저장공간의 제약이 없다. 반면 Redshift, BigQuery, Snowflake등은 비용이 더 들어간다.
+
+### Airflow 구성요소
+
+1. Web Server (Flask)
+2. Scheduler
+3. Worker
+4. Database
+5. Queue (Executor)
+
+### Scale Up vs Scale Out
+
+1. Scale Up : 더 고성능의 서버로 확장하는 것
+    1. 주로 Production DB는 Scaler Out이 어렵기 때문에 Scale Up 방식 채택
+2. Scale Out : 여러 대의 서버를 확장하는 것
+    1. 반면, DataWare house는 Scaler Out이 가능함
+
+### Airflow의 단위
+
+- DAG (Directed Acyclic Graph)
+
+방향이 있고 순환하지 않는 그래프로 Airflow에서 DAG는 Task들로 구성된다.
+
+- DAG example
+
+```python
+from datetime import datetime, timedelta
+from airflow import DAG
+default_args = {
+	'owner' : 'ghgoo1798',
+	'start_date' : datetime(2020, 8, 7, hour=0, minute=00),
+	'end_date' : datetime(2020, 8, 31, hour=23, minute=00),
+	'email' : ['ghgoo1798@gmail.com'],
+	'retries' : 1,
+	'retry_delay': timedelta(minutes=3),
+ }
+```
+
+1. start_date 조심하기
+    1. start_date은 데이터 기준 시점이다. 주기가 1일이라면 8월7일 데이터는 8월 8일에 수집된다.
+2. catchup 옵션 조심하기
+    1. chatchup이 True라면, DAG가 활성화되었고, 과거에 실행되지 않은 Job이 있다면?
+    2. 현재 시점까지의 모든 Job이 연쇄적으로 실행된다.
+
