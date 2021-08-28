@@ -50,3 +50,51 @@
     3. 초기엔 Consistency를 유지하는 것이 중요
         1. **Naming convetion의 중요성**
     4. DB는 마스터/슬레이브 아키텍처 적용
+
+## 3️⃣ 주차 강의 내용
+
+3주차의 강의 내용은 SQL 활용에 대한 내용이었고, 실습위주로 진행되었다.
+1. **DDL/DML 기본 문법**
+    1. SELECT/UPDATE/INSERT/DELETE
+    2. CREATE/DROP/RENAME
+    3. WHERE, CASE WHEN, GROUP BY, ORDER BY
+    4. ROW NUMBER() OVER(), LEFT, TO_CHAR, CTAS
+2. **중복 레코드 확인하기**
+    1. 📌 Count 함수
+        1. COUNT(1), COUNT(value), COUNT(DISTINCT value) 차이❗
+        2. COUNT(1)은 NULL이 포함된 행도 COUNT
+        3. COUNT(value)는 NULL 제외
+        4. COUNT(DISTINCT value)는 중복된 value 제외
+    2. SELECT DISTINCT
+3. **NULL 확인하기**
+    1. IS NULL/IS NOT NULL
+    2. Boolean과 NULL의 차이
+        1. IS NOT TRUE ↔ True가 아닌 것, False와 NULL 모두 해당
+        2. IS NOT FALSE ↔ False가 아닌 것, True와 NULL 모두 해당
+    3. NULL과의 사칙연산 결과는 모두 NULL
+        1. 값이 존재하지 않음을 의미하므로!
+4. ⭐ **DW에서는 Primary Key를 지정해도 Uniqueness를 보장하지 않는다.**
+5. **JOIN**
+    1. INNER/LEFT/RIGHT/SELF/FULL/CROSS JOIN
+6. **DELETE FROM과 TRUNCATE의 차이❓**
+    1. DELETE FROM
+        1. DELETE FROM은 테이블의 모든 레코드를 삭제한다.
+        2. 단, 테이블은 남아있다는 점이 DROP TABLE과 다른 점이다.
+        3. WHERE 사용해 특정 레코드만 삭제 가능하다.
+    2. TRUNCATE
+        1. DELETE FROM과 마찬가지로 테이블의 모든 레코드를 삭제한다.
+        2. DELETE FROM에 비해 삭제 속도가 빠르다.
+        3. 하지만, TRUNCATE는 WHERE를 지원하지 않으며, Transaction 또한 지원하지 않는다.
+7. **COALESCE와 NULLIF**
+    1. COALESCE(value, 1)
+        1. value가 NULL인 경우 1로 대체할 수 있다.
+    2. NULLIF(value, 0)
+        1. value가 0이면 NULL을 리턴한다.
+8. **UNION과 UNION ALL 차이점**
+    1. UNION
+        1. 합집합으로, 중복을 제거한다.
+    2. UNION ALL
+        1. 중복을 허용한 합집합이다.
+
+위 내용을 바탕으로 3가지 Assingment를 수행했고, 받은 피드백을 바탕으로 SQL을 익숙하게 사용할 수 있게 되었다.
+
