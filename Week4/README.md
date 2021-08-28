@@ -1,8 +1,8 @@
 ## ⭐ 커리어 이야기
 
 ### Assignment Review
+![image](https://user-images.githubusercontent.com/44918665/131233517-fe7ae300-b3c7-4ae2-8cf0-84aad55be7cf.png)
 
-![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/2cd2024e-17bb-4535-9657-a9d9188bc44b/Untitled.png)
 
 **❤ 느낀점**
 
