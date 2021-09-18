@@ -158,7 +158,7 @@ default_args = {
 ## 5️⃣ 주차 강의 내용
 - Airflow 시 혼란을 겪는 부분을 중점적으로 학습하였다.
 
-## ⭐ Autocommit 설정
+### Autocommit 설정
 
 1. **autocommit = False일 때**
     1. 내가 명시적으로 commit을 하기 전까지는 나에게만 그 변화가 보인다. 다른 사람들에게는 그 변화가 보이지 않는다.
@@ -174,7 +174,7 @@ default_args = {
 4. **transaction 중간에 에러가 발생할 때 주의할 점**
     1. exception 처리 시 ROLLBACK;을 수행해줘야함
 
-## ⭐ Start_date 이해하기
+### Start_date 이해하기
 
 1. 실제 실행 시점은 start_date + interval이다.
 2. 데이터 기준 start_date으로 execution_date을 의미하는 것이 아니다.
@@ -184,7 +184,7 @@ default_args = {
     2. full refresh할 경우 back fill이 아무 의미 없다.
     3. 현재 시점으로 execution_date을 설정하지 않아야 한다.
 
-## ⭐ DELETE FROM과 TRUNCATE
+### DELETE FROM과 TRUNCATE
 
 1. 공통점
     1. 테이블 내용을 삭제한다는 일은 정확히 똑같다.
@@ -197,7 +197,7 @@ default_args = {
         2. 확실한 상황에서만 사용해야 한다.
         3. 속도가 빠르다.
 
-## ⭐ Terminal 실행하기
+### Terminal 실행하기
 
 - airflow tasks test my_first_dag print_hello {execution}
 - airflow tasks run my_first_dag print_hello  {execution}
