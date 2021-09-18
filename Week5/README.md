@@ -39,5 +39,5 @@
 
 ## ⭐ Terminal 실행하기
 
-- airflow tasks test my_first_dag print_hello {execution}
-- airflow tasks run my_first_dag print_hello  {execution}
+- airflow tasks test my_first_dag print_hello {execution_date}
+- airflow tasks run my_first_dag print_hello  {execution_date}
