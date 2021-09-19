@@ -187,7 +187,7 @@ s3_to_redshift_nps = S3ToRedshiftOperator(
 )
 ```
 
-1. Good) plugins.s3_to_redshift_operator 변경 (상속 및 재작성)
+1. Best practice : plugins.s3_to_redshift_operator 변경 (상속 및 재작성)
 
 ```sql
 #from airflow.providers.amazon.aws.transfers.s3_to_redshift import S3ToRedshiftOperator
