@@ -206,7 +206,7 @@ s3_to_redshift_nps = S3ToRedshiftOperator(
 	dag = dag
 )
 
-s3_folder_cleanup >. mysql_to_s3_nps >> s3_to_redshift_nps
+s3_folder_cleanup >> mysql_to_s3_nps >> s3_to_redshift_nps
 ```
 
 ```sql
