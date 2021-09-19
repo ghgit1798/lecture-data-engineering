@@ -41,3 +41,296 @@
 
 - airflow tasks test my_first_dag print_hello {execution_date}
 - airflow tasks run my_first_dag print_hello  {execution_date}
+
+## ⭐ 과제
+
+### Workflow DAG 변경하기
+
+1. weather_foreacast 테이블 생성하기
+    1. api key 발급 후, DAG Variable 등록
+    2. 앞으로 updated_date으로 primary key uniqueness 보장
+    3. 이유는 사용하는 api에서 execution_date을 지정할 수 없기 때문
+
+```sql
+-- weather_forecast 테이블 생성
+
+CREATE TABLE ghgoo1798.weather_forecast(
+	date date primary key,
+	temp float,
+	min_temp float,
+	max_temp float,
+	updated_date timestamp default GETDATE()
+);
+```
+
+1. API를 활용해 데이터 수집하기
+
+```python
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from airflow.models import Variable
+from airflow.hoooks.postgres_hook import PostgresHook
+
+from datetime import datetime
+from datetime import timedelta
+
+import requests
+import logging
+import psycopg2
+import json
+
+def get_Redshift_connection():
+	# autocommit is False by default
+	hook = PostgresHook(postgres_conn_id = 'redshift_dev_db')
+	return hook.get_conn().cursor()
+
+def etl(**context):
+    api_key = Variable.get("open_weather_api_key")
+    # 서울의 위도/경도
+    lat = 37.5665
+    lon = 126.9780
+
+    # https://openweathermap.org/api/one-call-api
+    url = "https://api.openweathermap.org/data/2.5/onecall?lat=%s&lon=%s&appid=%s&units=metric" % (lat, lon, api_key)
+    response = requests.get(url)
+    data = json.loads(response.text)
+
+    """
+    {'dt': 1622948400, 'sunrise': 1622923873, 'sunset': 1622976631, 'moonrise': 1622915520, 'moonset': 1622962620, 'moon_phase': 0.87, 'temp': {'day': 26.59, 'min': 15.67, 'max': 28.11, 'night': 22.68, 'eve': 26.29, 'morn': 15.67}, 'feels_like': {'day': 26.59, 'night': 22.2, 'eve': 26.29, 'morn': 15.36}, 'pressure': 1003, 'humidity': 30, 'dew_point': 7.56, 'wind_speed': 4.05, 'wind_deg': 250, 'wind_gust': 9.2, 'weather': [{'id': 802, 'main': 'Clouds', 'description': 'scattered clouds', 'icon': '03d'}], 'clouds': 44, 'pop': 0, 'uvi': 3}
+    """
+    ret = []
+    for d in data["daily"]:
+        day = datetime.fromtimestamp(d["dt"]).strftime('%Y-%m-%d')
+        ret.append("('{}',{},{},{})".format(day, d["temp"]["day"], d["temp"]["min"], d["temp"]["max"]))
+
+    cur = get_Redshift_connection()
+    insert_sql = """DELETE FROM ghgoo1798.weather_forecast;INSERT INTO ghgoo1798.weather_forecast VALUES """ + ",".join(ret)
+    logging.info(insert_sql)
+    try:
+        cur.execute(insert_sql)
+        cur.execute("Commit;")
+    except Exception as e:
+        cur.execute("Rollback;")
+
+dag = DAG(
+    dag_id = 'Weather_to_Redshift',
+    start_date = datetime(2021,9,3), # 날짜가 미래인 경우 실행이 안됨
+    schedule_interval = '0 2 * * *',  # 적당히 조절
+    max_active_runs = 1,
+    catchup = False,
+    default_args = {
+        'retries': 1,
+        'retry_delay': timedelta(minutes=3),
+    }
+)
+
+etl = PythonOperator(
+    task_id = 'etl',
+    python_callable = etl,
+    dag = dag
+)
+```
+
+1. Primary Key 유지하기 위해 temp 테이블 생성
+    1. temp 테이블에 수집 데이터가 저장되도록 DAG 변경
+    2. updated_date가 최신인 행 1개씩만 추출해서 원본 테이블에 저장
+    3. ROW_NUMBER, Partition by, Order by 활용
+
+```python
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+# from airflow.operators import PythonOperator
+from airflow.models import Variable
+from airflow.hooks.postgres_hook import PostgresHook
+
+from datetime import datetime
+from datetime import timedelta
+
+import requests
+import logging
+import psycopg2
+import json
+
+def get_Redshift_connection():
+    # autocommit is False by default
+    hook = PostgresHook(postgres_conn_id='redshift_dev_db')
+    return hook.get_conn().cursor()
+
+def etl(**context):
+    api_key = Variable.get("open_weather_api_key")
+    # 서울의 위도/경도
+    lat = 37.5665
+    lon = 126.9780
+
+    # https://openweathermap.org/api/one-call-api
+    url = "https://api.openweathermap.org/data/2.5/onecall?lat=%s&lon=%s&appid=%s&units=metric" % (lat, lon, api_key)
+    response = requests.get(url)
+    data = json.loads(response.text)
+
+    """
+    {'dt': 1622948400, 'sunrise': 1622923873, 'sunset': 1622976631, 'moonrise': 1622915520, 'moonset': 1622962620, 'moon_phase': 0.87, 'temp': {'day': 26.59, 'min': 15.67, 'max': 28.11, 'night': 22.68, 'eve': 26.29, 'morn': 15.67}, 'feels_like': {'day': 26.59, 'night': 22.2, 'eve': 26.29, 'morn': 15.36}, 'pressure': 1003, 'humidity': 30, 'dew_point': 7.56, 'wind_speed': 4.05, 'wind_deg': 250, 'wind_gust': 9.2, 'weather': [{'id': 802, 'main': 'Clouds', 'description': 'scattered clouds', 'icon': '03d'}], 'clouds': 44, 'pop': 0, 'uvi': 3}
+    """
+    ret = []
+    for d in data["daily"]:
+        day = datetime.fromtimestamp(d["dt"]).strftime('%Y-%m-%d')
+        # Primary Key 유지를 위한 updated_date도 추가해줘야함
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ret.append("('{}',{},{},{},{})".format(day, d["temp"]["day"], d["temp"]["min"], d["temp"]["max"], now))
+
+    ### 스키마 변경 + 수집할때마다 삭제하지 않고 계속 누적
+    cur = get_Redshift_connection() 
+    insert_sql = """INSERT INTO ghgoo1798.temp_weather_forecast VALUES """ + ",".join(ret)
+    logging.info(insert_sql)
+    try:
+        cur.execute(insert_sql)
+        cur.execute("Commit;")
+    except Exception as e:
+        cur.execute("Rollback;")
+
+## 원본 테이블에 저장하는 save 함수 생성
+def save():
+  cur = get_Redshift_connection()
+  sql = """
+    BEGIN; 
+    DELETE FROM ghgoo1798.weather_forecast; 
+    INSERT INTO ghgoo1798.weather_forecast SELECT date, temp, min_temp, max_temp, updated_date 
+    FROM (
+      SELECT *, ROW_NUMBER() OVER (PARTITION BY date ORDER BY updated_date DESC) seq
+      FROM ghgoo1798.temp_weather_forecast
+    ) WHERE seq=1;
+    END;
+  """
+  cur.execute(sql)
+
+dag = DAG(
+    dag_id = 'Weather_to_Redshift',
+    start_date = datetime(2021,9,3), # 날짜가 미래인 경우 실행이 안됨
+    schedule_interval = '0 2 * * *',  # 적당히 조절
+    max_active_runs = 1,
+    catchup = False,
+    default_args = {
+        'retries': 1,
+        'retry_delay': timedelta(minutes=3),
+    }
+)
+
+etl = PythonOperator(
+    task_id = 'etl',
+    python_callable = etl,
+    dag = dag
+)
+
+## save task 생성
+save = PythonOperator(
+    task_id = 'save',
+    python_callable = save,
+    dag = dag
+)
+
+etl >> save
+```
+
+1. 피드백 반영
+    1. PostgresHook 사용 시, autocommit이 False로 설정되므로 BEGIN; END;로 둘러싸지 않아도 된다.
+        1. 고로 save의 경우 commit;이 실행되지 않아 며칠동안 동작 시 안정성을 보장할 수 없음
+        2. 따라서 SQL 실행을 try/except로 넣고 commit; rollback 수행
+    2. try/except 처리 시 exception이 발생했을 때, except로 처리하면 에러가 더 이상 전파되지 않음. ETL 운영 관점에서 에러가 난 걸 알 수가 없다.
+        1. 따라서 try ~ exception 처리 후 뒤에 raise를 붙여 줄 것
+        2. raise는 직접 에러를 발생시키는 명령어
+
+    ```python
+    from airflow import DAG
+    from airflow.operators.python import PythonOperator
+    # from airflow.operators import PythonOperator
+    from airflow.models import Variable
+    from airflow.hooks.postgres_hook import PostgresHook
+
+    from datetime import datetime
+    from datetime import timedelta
+
+    import requests
+    import logging
+    import psycopg2
+    import json
+
+    def get_Redshift_connection():
+        # autocommit is False by default
+        hook = PostgresHook(postgres_conn_id='redshift_dev_db')
+        return hook.get_conn().cursor()
+
+    def etl(**context):
+        api_key = Variable.get("open_weather_api_key")
+        # 서울의 위도/경도
+        lat = 37.5665
+        lon = 126.9780
+
+        # https://openweathermap.org/api/one-call-api
+        url = "https://api.openweathermap.org/data/2.5/onecall?lat=%s&lon=%s&appid=%s&units=metric" % (lat, lon, api_key)
+        response = requests.get(url)
+        data = json.loads(response.text)
+
+        """
+        {'dt': 1622948400, 'sunrise': 1622923873, 'sunset': 1622976631, 'moonrise': 1622915520, 'moonset': 1622962620, 'moon_phase': 0.87, 'temp': {'day': 26.59, 'min': 15.67, 'max': 28.11, 'night': 22.68, 'eve': 26.29, 'morn': 15.67}, 'feels_like': {'day': 26.59, 'night': 22.2, 'eve': 26.29, 'morn': 15.36}, 'pressure': 1003, 'humidity': 30, 'dew_point': 7.56, 'wind_speed': 4.05, 'wind_deg': 250, 'wind_gust': 9.2, 'weather': [{'id': 802, 'main': 'Clouds', 'description': 'scattered clouds', 'icon': '03d'}], 'clouds': 44, 'pop': 0, 'uvi': 3}
+        """
+        ret = []
+        for d in data["daily"]:
+            day = datetime.fromtimestamp(d["dt"]).strftime('%Y-%m-%d')
+            # Primary Key 유지를 위한 updated_date도 추가해줘야함
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            ret.append("('{}',{},{},{},{})".format(day, d["temp"]["day"], d["temp"]["min"], d["temp"]["max"], now))
+
+        ### 스키마 변경 + 수집할때마다 삭제하지 않고 계속 누적
+        cur = get_Redshift_connection() 
+        insert_sql = """INSERT INTO ghgoo1798.temp_weather_forecast VALUES """ + ",".join(ret)
+        logging.info(insert_sql)
+        try:
+            cur.execute(insert_sql)
+            cur.execute("Commit;")
+        except Exception as e:
+            cur.execute("Rollback;")
+
+    ## 원본 테이블에 저장하는 save 함수 생성
+    def save():
+      cur = get_Redshift_connection()
+      sql = """
+        DELETE FROM ghgoo1798.weather_forecast; 
+        INSERT INTO ghgoo1798.weather_forecast SELECT date, temp, min_temp, max_temp, updated_date 
+        FROM (
+          SELECT *, ROW_NUMBER() OVER (PARTITION BY date ORDER BY updated_date DESC) seq
+          FROM ghgoo1798.temp_weather_forecast
+        ) WHERE seq=1;
+      """
+      try:
+        cur.execute(sql)
+        cur.execute("Commit;")
+      except Exception as e:
+        cur.execute("Rollback;")
+        raise
+
+    dag = DAG(
+        dag_id = 'Weather_to_Redshift',
+        start_date = datetime(2021,9,3), # 날짜가 미래인 경우 실행이 안됨
+        schedule_interval = '0 2 * * *',  # 적당히 조절
+        max_active_runs = 1,
+        catchup = False,
+        default_args = {
+            'retries': 1,
+            'retry_delay': timedelta(minutes=3),
+        }
+    )
+
+    etl = PythonOperator(
+        task_id = 'etl',
+        python_callable = etl,
+        dag = dag
+    )
+
+    ## save task 생성
+    save = PythonOperator(
+        task_id = 'save',
+        python_callable = save,
+        dag = dag
+    )
+
+    etl >> save
+    ```
