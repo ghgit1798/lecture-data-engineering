@@ -392,3 +392,32 @@ CREATE TABLE nps_summary AS (
 	GROUP BY LEFT(created_at, 10)
 );
 ```
+### Best practice
+
+- Case 1
+
+```sql
+SELECT month, ROUND((promoters-detractors)::float/total_count*100, 2) AS overall_nps
+FROM (
+	SELECT LEFT(created_at, 7) AS month,
+		COUNT(CASE WHEN score >= 9 THEN 1 END) AS promotors,
+		COUNT(CASE WHEN score <= 6 THEN 1 END) AS detractors,
+		COUNT(CASE WHEN score > 6 AND score < 9 THEN 1 END) AS passives,
+		COUNT(1) AS total_count
+	FROM ghgoo1798.nps
+	GROUP BY 1
+	ORDER BY 1
+);
+```
+
+- Case 2
+
+```sql
+SELECT LEFT(created_ad, 7) AS month, 
+	ROUND(SUM(CASE 
+		WHEN score >= 9 THEN 1
+		WHEN score <= 6 THEN -1 END)::float*100/COUNT(1), 2)
+FROM ghgoo1798.nps
+GROUP BY 1
+ORDER BY 1;
+```
